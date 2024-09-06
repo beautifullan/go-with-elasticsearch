@@ -17,16 +17,16 @@ import (
 
 // 定义字段，数据库中定义了数据的存储方式，但是没有定义在go中如何处理，这个结构体与表结构相匹配
 type Paper struct {
-	ID          int    `json:"id"`
-	Title       string `json:"title"`
-	Authors     string `json:"authors"`
-	Abstract    string `json:"abstract"`
-	Content     string `json:"content"`
-	Tags        string `json:"tags"`
-	Pdf         string `json:"pdf"`
-	Publish     string `json:"publish"`
-	PublishDate string `json:"publishDate"`
-	Picture     string `json:"picture"`
+	ID          int      `json:"id"`
+	Title       string   `json:"title"`
+	Authors     []string `json:"authors"`
+	Abstract    string   `json:"abstract"`
+	Content     string   `json:"content"`
+	Tags        []string `json:"tags"`
+	Pdf         string   `json:"pdf"`
+	Publish     string   `json:"publish"`
+	PublishDate string   `json:"publishDate"`
+	Picture     string   `json:"picture"`
 }
 
 type CreateIndexResponse struct {
@@ -48,7 +48,6 @@ func indexPaper(db *sql.DB, es *elasticsearch.Client) CreateIndexResponse {
 		log.Fatalf("Error checking if index exists: %s", err)
 	}
 	defer res.Body.Close()
-	log.Println(res.StatusCode)
 	//if res.IsError() {
 	//  log.Fatalf("Index checking error: %s", res.Status())
 	//}
@@ -68,10 +67,10 @@ func indexPaper(db *sql.DB, es *elasticsearch.Client) CreateIndexResponse {
 		mapping := map[string]interface{}{
 			"properties": map[string]interface{}{
 				"title":       map[string]interface{}{"type": "text"},
-				"authors":     map[string]interface{}{"type": "text"},
+				"authors":     map[string]interface{}{"type": "object"},
 				"abstract":    map[string]interface{}{"type": "text"},
 				"content":     map[string]interface{}{"type": "text"},
-				"tags":        map[string]interface{}{"type": "text"},
+				"tags":        map[string]interface{}{"type": "object"},
 				"pdf":         map[string]interface{}{"type": "text"},
 				"publish":     map[string]interface{}{"type": "text"},
 				"publishDate": map[string]interface{}{"type": "date"},
@@ -101,7 +100,8 @@ func indexPaper(db *sql.DB, es *elasticsearch.Client) CreateIndexResponse {
 		if res.IsError() {
 			log.Printf("error creating the index: %s", res.String())
 		}
-		rows, err := db.Query("SELECT * FROM paper")
+		//rows, err := db.Query("SELECT title,authors, abstract, content,tags, pdf, publish, publishDate, picture FROM paper")
+		rows, err := db.Query("SELECT id,title,JSON_EXTRACT(authors,'$') AS authors, abstract, content,JSON_EXTRACT(tags,'$') AS tags, pdf, publish, publishDate, picture FROM paper")
 		if err != nil {
 			log.Println(err)
 		}
@@ -109,23 +109,52 @@ func indexPaper(db *sql.DB, es *elasticsearch.Client) CreateIndexResponse {
 
 		for rows.Next() {
 			var paper Paper
-			err := rows.Scan(&paper.ID, &paper.Title, &paper.Authors, &paper.Abstract, &paper.Content, &paper.Tags, &paper.Pdf, &paper.Publish, &paper.PublishDate, &paper.Picture)
-			if err != nil {
-				log.Println("Error scanning row:", err)
-				continue
+			var authorsJson, tagsJson sql.RawBytes
+			//err := rows.Scan(&paper.Title, &paper.Authors, &paper.Abstract, &paper.Content, &paper.Tags, &paper.Pdf, &paper.Publish, &paper.PublishDate, &paper.Picture)
+			//if err != nil {
+			//	log.Println("Error scanning row:", err)
+			//	continue
+			//}
+			if err := rows.Scan(&paper.ID, &paper.Title, &authorsJson, &paper.Abstract, &paper.Content, &tagsJson, &paper.Pdf, &paper.Publish, &paper.PublishDate, &paper.Picture); err != nil {
+				log.Fatal(err)
 			}
+			var authors []string
+			if err := json.Unmarshal(authorsJson, &authors); err != nil {
+				log.Fatal(err)
+			}
+			paper.Authors = authors
+
+			var tags []string
+			if err := json.Unmarshal(tagsJson, &tags); err != nil {
+				log.Fatal(err)
+			}
+			paper.Tags = tags
+			if err := json.Unmarshal(authorsJson, &paper.Authors); err != nil {
+				log.Fatal(err)
+			}
+			if err := json.Unmarshal(tagsJson, &paper.Tags); err != nil {
+				log.Fatal(err)
+			}
+			//fmt.Println("Authors:", paper.Authors)
+			//fmt.Println("Tags:", paper.Tags)
+			//t := reflect.TypeOf(paper.Authors)
+			//log.Println(t)
+
 			docID := paper.Title // 使用标题作为文档ID
 			doc, err := json.Marshal(paper)
 			if err != nil {
 				log.Println("Error marshalling paper data:", err)
 				continue
 			}
+			//log.Println(paper)
+			//log.Println(paper.Authors) ["Jane Doe", "John Smith"]
 			// 发送索引请求
 			req := esapi.IndexRequest{
 				Index:      index,
 				Body:       strings.NewReader(string(doc)),
 				DocumentID: docID,
 			}
+			log.Println(strings.NewReader(string(doc)))
 			res, err := req.Do(context.Background(), es)
 			if err != nil {
 				log.Fatalf("执行创建索引失败%v", err)

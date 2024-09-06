@@ -7,7 +7,6 @@ import (
 	"github.com/elastic/go-elasticsearch"
 	"github.com/elastic/go-elasticsearch/esapi"
 	"go-with-elasticsearch/create"
-
 	"log"
 	"net/http"
 	"net/url"
@@ -62,9 +61,8 @@ func searchPaper(es *elasticsearch.Client, query url.Values) (SearchResponse, er
 	}
 
 	// 打印最终的 searchQuery
-	//fmt.Println(searchQuery)
 
-	// 发送搜索请求，elasticsearch的api需要接收 json格式的数据作为请求体来执行搜索操作
+	//发送搜索请求，elasticsearch的api需要接收 json格式的数据作为请求体来执行搜索操作
 	searchQueryJSON, err := json.Marshal(searchQuery)
 	if err != nil {
 		return searchResponse, fmt.Errorf("error marshalling search query: %w", err)
@@ -73,19 +71,22 @@ func searchPaper(es *elasticsearch.Client, query url.Values) (SearchResponse, er
 	req := esapi.SearchRequest{
 		Index: []string{index},
 		Body:  strings.NewReader(string(searchQueryJSON)),
-		//Body:  strings.NewReader(fmt.Sprintf("%v", searchQuery)),
 	}
+	///////
+	//log.Printf("this is body %v ", strings.NewReader(string(searchQueryJSON)))
 	res, err := req.Do(context.Background(), es)
 	if err != nil {
 		return searchResponse, fmt.Errorf("error searching index: %w", err)
 	}
+	///////
+	//log.Printf("this is res %v ", res)
 	defer res.Body.Close()
 
 	if res.IsError() {
 		return searchResponse, fmt.Errorf("error searching index: %s", res.String())
 	}
 
-	log.Println(res)
+	//log.Println(res)
 	// 解析搜索的结果
 	//构建搜索查询时，要将查询对象转化为有效的 JSON 字符串而不是直接转换为字符串，不不然可能导致 Elasticsearch 在解析查询时出现问题。
 
@@ -97,22 +98,26 @@ func searchPaper(es *elasticsearch.Client, query url.Values) (SearchResponse, er
 	// 提取命中结果和总记录数
 	hits := response["hits"].(map[string]interface{})["hits"].([]interface{})
 	searchResponse.Total = int(response["hits"].(map[string]interface{})["total"].(map[string]interface{})["value"].(float64))
-	for _, hit := range hits {
-		hitMap := hit.(map[string]interface{})
-		sourceMap := hitMap["_source"].(map[string]interface{})
-		var paper create.Paper
-		sourceJSON, err := json.Marshal(sourceMap)
-		if err != nil {
-			return searchResponse, fmt.Errorf("error marshalling source data: %w", err)
-		}
-		if err := json.Unmarshal(sourceJSON, &paper); err != nil {
-			return searchResponse, fmt.Errorf("error unmarshalling paper data: %w", err)
-		}
-		if paper.ID != 0 {
-			searchResponse.Hits = append(searchResponse.Hits, paper)
-		}
-
-	}
+	//for _, hit := range hits {
+	//	hitMap := hit.(map[string]interface{})
+	//	sourceMap := hitMap["_source"].(map[string]interface{})
+	//	var paper create.Paper
+	//	sourceJSON, err := json.Marshal(sourceMap)
+	//	if err != nil {
+	//		return searchResponse, fmt.Errorf("error marshalling source data: %w", err)
+	//	}
+	//	if err := json.Unmarshal(sourceJSON, &paper); err != nil {
+	//		return searchResponse, fmt.Errorf("error unmarshalling paper data: %w", err)
+	//	}
+	//	//log.Printf("this is hit %v", hit)
+	//	if paper.ID != 0 {
+	//		searchResponse.Hits = append(searchResponse.Hits, paper)
+	//	}
+	//	log.Printf("this is id %v", paper.ID) //为什么打印出来对id为0呢
+	//
+	//	log.Printf("this is hit1111 % v", hits) //hits有但是searchresponse.hits为空
+	//	log.Printf("this is hits %v", searchResponse.Hits)
+	//}
 	searchResponse.Total = 0
 	for _, hit := range hits {
 		hitMap := hit.(map[string]interface{})
@@ -128,8 +133,10 @@ func searchPaper(es *elasticsearch.Client, query url.Values) (SearchResponse, er
 		}
 
 		if paper.ID != 0 {
+			searchResponse.Hits = append(searchResponse.Hits, paper)
 			searchResponse.Total++
-		}
+		} /////
+		//log.Printf("this is hits %v", searchResponse.Hits)
 	}
 
 	return searchResponse, nil

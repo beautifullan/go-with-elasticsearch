@@ -37,20 +37,20 @@ func searchPaper(es *elasticsearch.Client, query url.Values) (SearchResponse, er
 	// 如果有查询参数，则根据查询参数构建查询
 	if len(query) > 0 {
 		for key, values := range query {
-			if key == "title" || key == "abstract" || key == "content" || key == "tags" || key == "publishDate" {
-				for _, value := range values {
-					queryPart := map[string]interface{}{
-						"match": map[string]interface{}{
-							key: value,
-						},
-					}
-					searchQuery["query"].(map[string]interface{})["bool"].(map[string]interface{})["must"] = append(
-						searchQuery["query"].(map[string]interface{})["bool"].(map[string]interface{})["must"].([]interface{}),
-						queryPart,
-					)
+			//if key == "title" || key == "abstract" || key == "content" || key == "tags" || key == "publishDate" {
+			for _, value := range values {
+				queryPart := map[string]interface{}{
+					"match": map[string]interface{}{
+						key: value,
+					},
 				}
+				searchQuery["query"].(map[string]interface{})["bool"].(map[string]interface{})["must"] = append(
+					searchQuery["query"].(map[string]interface{})["bool"].(map[string]interface{})["must"].([]interface{}),
+					queryPart,
+				)
 			}
 		}
+		//}
 	} else {
 		// 如果没有查询参数，则构建一个匹配所有文档的查询
 		searchQuery = map[string]interface{}{
@@ -98,32 +98,23 @@ func searchPaper(es *elasticsearch.Client, query url.Values) (SearchResponse, er
 	// 提取命中结果和总记录数
 	hits := response["hits"].(map[string]interface{})["hits"].([]interface{})
 	searchResponse.Total = int(response["hits"].(map[string]interface{})["total"].(map[string]interface{})["value"].(float64))
-	//for _, hit := range hits {
-	//	hitMap := hit.(map[string]interface{})
-	//	sourceMap := hitMap["_source"].(map[string]interface{})
-	//	var paper create.Paper
-	//	sourceJSON, err := json.Marshal(sourceMap)
-	//	if err != nil {
-	//		return searchResponse, fmt.Errorf("error marshalling source data: %w", err)
-	//	}
-	//	if err := json.Unmarshal(sourceJSON, &paper); err != nil {
-	//		return searchResponse, fmt.Errorf("error unmarshalling paper data: %w", err)
-	//	}
-	//	//log.Printf("this is hit %v", hit)
-	//	if paper.ID != 0 {
-	//		searchResponse.Hits = append(searchResponse.Hits, paper)
-	//	}
-	//	log.Printf("this is id %v", paper.ID) //为什么打印出来对id为0呢
-	//
-	//	log.Printf("this is hit1111 % v", hits) //hits有但是searchresponse.hits为空
-	//	log.Printf("this is hits %v", searchResponse.Hits)
-	//}
 	searchResponse.Total = 0
 	for _, hit := range hits {
 		hitMap := hit.(map[string]interface{})
 		sourceMap := hitMap["_source"].(map[string]interface{})
-		var paper create.Paper
+		//idValue, ok := sourceMap["_id"]
+		//if !ok {
+		//	log.Println("ID field missing in document")
+		//	continue
+		//}
+		//idFloat, ok := idValue.(float64)
+		//if !ok {
+		//	log.Printf("ID field is not a valid number: %v", idValue)
+		//	continue
+		//}
 
+		var paper create.Paper
+		//paper.ID = int(idFloat)
 		sourceJSON, err := json.Marshal(sourceMap)
 		if err != nil {
 			return searchResponse, fmt.Errorf("error marshalling source data: %w", err)
@@ -131,13 +122,44 @@ func searchPaper(es *elasticsearch.Client, query url.Values) (SearchResponse, er
 		if err := json.Unmarshal(sourceJSON, &paper); err != nil {
 			return searchResponse, fmt.Errorf("error unmarshalling paper data: %w", err)
 		}
-
+		//log.Printf("this is hit %v", hit)
+		log.Printf("Processing hit with ID: %v", paper.Title)
+		//if paper.ID != 0 {
+		//	searchResponse.Hits = append(searchResponse.Hits, paper)
+		//
+		//}
 		if paper.ID != 0 {
 			searchResponse.Hits = append(searchResponse.Hits, paper)
 			searchResponse.Total++
-		} /////
-		//log.Printf("this is hits %v", searchResponse.Hits)
+
+		}
 	}
+	////}
+	//log.Printf("this is id %v", paper.ID) //为什么打印出来对id为0呢
+	//
+	//log.Printf("this is hit1111 % v", hits) //hits有但是searchresponse.hits为空
+	//log.Printf("this is hits %v", searchResponse.Hits)
+
+	//searchResponse.Total = 0
+	//for _, hit := range hits {
+	//	hitMap := hit.(map[string]interface{})
+	//	sourceMap := hitMap["_source"].(map[string]interface{})
+	//	var paper create.Paper
+	//
+	//	sourceJSON, err := json.Marshal(sourceMap)
+	//	if err != nil {
+	//		return searchResponse, fmt.Errorf("error marshalling source data: %w", err)
+	//	}
+	//	if err := json.Unmarshal(sourceJSON, &paper); err != nil {
+	//		return searchResponse, fmt.Errorf("error unmarshalling paper data: %w", err)
+	//	}
+	//
+	//	if paper.ID != 0 {
+	//		//searchResponse.Hits = append(searchResponse.Hits, paper)
+	//		searchResponse.Total++
+	//	} /////
+	//	log.Printf("this is hits %v", searchResponse.Hits)
+	//}
 
 	return searchResponse, nil
 }
